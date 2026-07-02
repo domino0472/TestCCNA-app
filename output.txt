@@ -1,0 +1,1 @@
+Stats: {'q_text': 7, 'q_not_bold': 0}

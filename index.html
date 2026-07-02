@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CCNA Interactive Quiz</title>
+    <meta name="description" content="Interactive CCNA practice quiz with explanations and exhibits.">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <button class="mobile-menu-btn" id="mobile-menu-btn">☰</button>
+
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <h2>Spis pytań</h2>
+            <button class="filter-btn" id="filter-btn" >Pokaż tylko pytania z obrazkami</button>
+        </div>
+        <div class="question-list" id="nav-list">
+            <!-- Populated by JS -->
+        </div>
+    </aside>
+
+    <main class="main-content" id="main-content">
+        <div class="container">
+            <header>
+                <h1>CCNA Interactive Quiz</h1>
+            </header>
+            <div id="quiz-container">
+                <div class="loading" id="loading">Loading questions...</div>
+            </div>
+        </div>
+    </main>
+
+    <script src="app.js"></script>
+</body>
+</html>
