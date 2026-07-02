@@ -8,28 +8,28 @@ import sys
 doc = fitz.open("CCNA.pdf")
 os.makedirs("assets", exist_ok=True)
 
-IMAGE_MAP = {
-    13: "page_8_img_1.png",
-    15: "page_10_img_1.jpeg",
-    17: "page_11_img_1.png",
-    18: "page_12_img_1.jpeg",
-    28: "page_18_img_1.jpeg",
-    33: "page_22_img_1.png",
-    35: "page_23_img_1.png",
-    43: "page_27_img_1.jpeg",
-    47: "page_29_img_1.png",
-    92: "page_56_img_1.jpeg",
-    98: "page_60_img_1.jpeg",
-    109: "page_66_img_1.jpeg",
-    113: "page_68_img_1.png",
-    118: "page_71_img_1.jpeg",
-    121: "page_72_img_1.jpeg",
-    127: "page_76_img_1.png",
-    134: "page_80_img_1.png",
-    150: "page_89_img_1.jpeg"
+IMAGE_DICTIONARY = {
+    13: "q13.png",
+    15: "q15.png",
+    18: "q18.png",
+    33: "q33.png",
+    35: "q35.png",
+    43: "q43.png",
+    47: "q47.png",
+    92: "q92.png",
+    98: "q98.png",
+    113: "q113.png",
+    127: "q127.png",
+    134: "q134.png",
+    150: "q150.png"
 }
 
 HARDCODED_MATCHES = {
+    152: [
+        {"left": "location of a desktop PC in a classroom", "right": "physical topology diagram"},
+        {"left": "path of cables that connect rooms to wiring closets", "right": "physical topology diagram"},
+        {"left": "IP address of a server", "right": "logical topology diagram"}
+    ],
     12: [
         {"left": "This network portion of the address is assigned by the provider.", "right": "global routing prefix"},
         {"left": "This part of the address is used by an organization to identify subnets.", "right": "subnet ID"},
@@ -136,29 +136,6 @@ HARDCODED_MATCHES = {
 COLOR_RED = 16711680
 questions = []
 
-# KROK 1: Wyodrębnienie WSZYSTKICH obrazków do assets/
-print("Wyodrębnianie obrazków...")
-for page_num in range(len(doc)):
-    page = doc.load_page(page_num)
-    blocks = page.get_text("dict")["blocks"]
-    img_idx = 0
-    for b in blocks:
-        if b["type"] == 1: # Image block
-            if b.get("width", 0) >= 100 and b.get("height", 0) >= 40:
-                ext = b.get("ext", "png")
-                img_name = f"page_{page_num}_img_{img_idx}.{ext}"
-                img_path = os.path.join("assets", img_name)
-                
-                if not os.path.exists(img_path):
-                    if b.get("image"):
-                        with open(img_path, "wb") as f:
-                            f.write(b["image"])
-                    elif b.get("xref"):
-                        base_image = doc.extract_image(b["xref"])
-                        with open(img_path, "wb") as f:
-                            f.write(base_image["image"])
-            img_idx += 1
-
 # KROK 2: Parsowanie tekstu
 print("Parsowanie pytań...")
 active_question = None
@@ -185,16 +162,33 @@ for page_num in range(len(doc)):
                     color = s["color"]
                     flags = s["flags"]
                     
-                    if re.match(r'^\d+\.\s+', text):
+                    match = re.match(r'^(\d+)\.\s+', text)
+                    if match:
+                        q_id = int(match.group(1))
+                        
+                        # Fix for duplicate/mismatched questions if they happen
+                        if active_question:
+                            expected_id = active_question["id"] + 1
+                        else:
+                            expected_id = 1
+                            
+                        if q_id != expected_id:
+                            print(f"[ERROR] Missing question ID in sequence! Expected {expected_id}, but found {q_id}. Sticking to PDF ID.")
+                        
                         if active_question:
                             questions.append(active_question)
                         
+                        if q_id in IMAGE_DICTIONARY:
+                            image_path = f"assets/{IMAGE_DICTIONARY[q_id]}"
+                        else:
+                            image_path = None
+                            
                         active_question = {
-                            "id": len(questions) + 1,
+                            "id": q_id,
                             "question": text + " ",
                             "options": [],
                             "explanation": "",
-                            "image": None,
+                            "image": image_path,
                             "section": "question"
                         }
                         capture_options = True
@@ -224,22 +218,13 @@ if active_question:
 # KROK 3: Mapowanie obrazków i weryfikacja
 print("Weryfikacja obrazków i przypisywanie...")
 for q in questions:
-    q["question"] = q["question"].strip()
-    q["explanation"] = q["explanation"].replace("Explanation:", "").strip()
-    
-    if "section" in q: del q["section"]
-    
-    # MANUAL ASSIGNMENT VERIFICATION
-    if q["id"] in IMAGE_MAP:
-        expected_filename = IMAGE_MAP[q["id"]]
-        expected_path = os.path.join("assets", expected_filename)
-        if not os.path.exists(expected_path):
-            print(f"\n[BŁĄD KRYTYCZNY] Pytanie {q['id']} wymaga obrazka {expected_filename}, ale plik nie istnieje w assets/!")
-            print("Zatrzymuję skrypt, popraw IMAGE_MAP.")
-            sys.exit(1)
-        q["image"] = expected_path
+    if q["id"] in IMAGE_DICTIONARY:
+        q["image"] = IMAGE_DICTIONARY[q["id"]]
+        print(f"DEBUG: Przypisano obrazek {q['image']} do pytania {q['id']}")
     else:
         q["image"] = None
+
+    if "section" in q: del q["section"]
     
     # HARDCODED MATCHES
     if q["id"] in HARDCODED_MATCHES:

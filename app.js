@@ -1,6 +1,6 @@
 let allQuestions = [];
+let remainingQuestions = [];
 let currentQuestion = null;
-let currentIndexInAll = 0;
 let showOnlyImages = false;
 let userStats = {};
 let answered = false;
@@ -23,8 +23,9 @@ async function fetchQuestions() {
         );
         
         if (allQuestions.length > 0) {
+            remainingQuestions = [...allQuestions];
             renderNavigation();
-            loadQuestion(0);
+            loadNextRandomQuestion();
         } else {
             const container = document.getElementById('quiz-container');
             container.innerHTML = '';
@@ -57,12 +58,13 @@ function toggleFilter() {
     }
     renderNavigation();
     
-    if (showOnlyImages && currentQuestion && !currentQuestion.image) {
-        const firstImgQ = allQuestions.findIndex(q => !!q.image);
-        if (firstImgQ !== -1) {
-            loadQuestion(firstImgQ);
-        }
+    if (showOnlyImages) {
+        remainingQuestions = allQuestions.filter(q => !!q.image);
+    } else {
+        remainingQuestions = [...allQuestions];
     }
+    
+    loadNextRandomQuestion();
 }
 
 function toggleSidebar() {
@@ -87,7 +89,8 @@ function renderNavigation() {
         }
 
         const item = document.createElement('div');
-        item.className = `nav-item ${i === currentIndexInAll ? 'active' : ''}`;
+        const isActive = currentQuestion && q.id === currentQuestion.id;
+        item.className = `nav-item ${isActive ? 'active' : ''}`;
         
         item.innerText = `Pytanie ${q.id}`;
 
@@ -98,16 +101,28 @@ function renderNavigation() {
             item.appendChild(indicator);
         }
 
-        item.addEventListener('click', () => loadQuestion(i));
+        item.addEventListener('click', () => loadSpecificQuestion(q));
         navList.appendChild(item);
     });
 }
 
-function loadQuestion(index) {
-    if (index < 0 || index >= allQuestions.length) return;
+function loadNextRandomQuestion() {
+    if (remainingQuestions.length === 0) {
+        showEndMessage();
+        return;
+    }
+    const randomIndex = Math.floor(Math.random() * remainingQuestions.length);
+    currentQuestion = remainingQuestions[randomIndex];
+    answered = false;
     
-    currentIndexInAll = index;
-    currentQuestion = allQuestions[index];
+    renderNavigation();
+    closeSidebarOnMobile();
+    
+    buildQuestionHTML(currentQuestion);
+}
+
+function loadSpecificQuestion(q) {
+    currentQuestion = q;
     answered = false;
     
     renderNavigation();
@@ -126,7 +141,8 @@ function buildQuestionHTML(q) {
     const container = document.getElementById('quiz-container');
     container.innerHTML = '';
     
-    const progress = ((currentIndexInAll + 1) / allQuestions.length) * 100;
+    const totalFiltered = showOnlyImages ? allQuestions.filter(q => !!q.image).length : allQuestions.length;
+    const progress = totalFiltered === 0 ? 0 : ((totalFiltered - remainingQuestions.length) / totalFiltered) * 100;
     const imageSrc = getRobustImagePath(q.image);
     
     const card = document.createElement('div');
@@ -189,97 +205,54 @@ function buildQuestionHTML(q) {
         
         if (q.matches && q.matches.length > 0) {
             const allRightOptions = q.matches.map(m => m.right);
-            const shuffledRightOptions = allRightOptions.sort(() => Math.random() - 0.5);
+            const uniqueRightOptions = [...new Set(allRightOptions)];
+            const shuffledRightOptions = uniqueRightOptions.sort(() => Math.random() - 0.5);
             
-            // Drag Pool (available tiles)
-            const dragPool = document.createElement('div');
-            dragPool.className = 'drag-pool';
-            dragPool.id = 'drag-pool';
-            
-            // Allow returning tiles to the pool
-            dragPool.addEventListener('dragover', (e) => {
-                e.preventDefault();
-                dragPool.classList.add('drag-over');
-            });
-            dragPool.addEventListener('dragleave', () => {
-                dragPool.classList.remove('drag-over');
-            });
-            dragPool.addEventListener('drop', (e) => {
-                e.preventDefault();
-                dragPool.classList.remove('drag-over');
-                if (answered) return;
-                const draggedId = e.dataTransfer.getData('text/plain');
-                const draggedElement = document.getElementById(draggedId);
-                if (draggedElement) {
-                    dragPool.appendChild(draggedElement);
-                }
-            });
-            
-            shuffledRightOptions.forEach((opt, idx) => {
-                const tile = document.createElement('div');
-                tile.className = 'draggable-tile';
-                tile.draggable = true;
-                tile.innerText = opt;
-                tile.id = 'drag-tile-' + idx;
-                tile.dataset.value = opt;
-                
-                tile.addEventListener('dragstart', (e) => {
-                    if (answered) {
-                        e.preventDefault();
-                        return;
-                    }
-                    e.dataTransfer.setData('text/plain', tile.id);
-                    e.dataTransfer.effectAllowed = 'move';
-                    setTimeout(() => tile.classList.add('dragging'), 0);
-                });
-                
-                tile.addEventListener('dragend', () => {
-                    tile.classList.remove('dragging');
-                });
-                
-                dragPool.appendChild(tile);
-            });
-            matchingContainer.appendChild(dragPool);
-            
-            // Drop Zones
             q.matches.forEach((match, idx) => {
                 const row = document.createElement('div');
                 row.className = 'matching-row';
+                row.style.display = 'flex';
+                row.style.justifyContent = 'space-between';
+                row.style.alignItems = 'center';
+                row.style.marginBottom = '1rem';
+                row.style.gap = '1rem';
                 
                 const leftText = document.createElement('div');
                 leftText.className = 'matching-left';
                 leftText.innerText = match.left;
+                leftText.style.flex = '1';
                 
-                const dropZone = document.createElement('div');
-                dropZone.className = 'drop-zone';
-                dropZone.dataset.correct = match.right;
+                const rightDrop = document.createElement('div');
+                rightDrop.className = 'matching-right';
+                rightDrop.style.flex = '1';
                 
-                dropZone.addEventListener('dragover', (e) => {
-                    e.preventDefault();
-                    if (!answered) dropZone.classList.add('drag-over');
+                const select = document.createElement('select');
+                select.className = 'matching-select';
+                select.dataset.correct = match.right;
+                select.id = `match-select-${idx}`;
+                select.style.width = '100%';
+                select.style.padding = '0.5rem';
+                select.style.borderRadius = '0.25rem';
+                select.style.border = '1px solid #4b5563';
+                select.style.background = '#374151';
+                select.style.color = '#f9fafb';
+                
+                const defaultOption = document.createElement('option');
+                defaultOption.value = '';
+                defaultOption.innerText = '-- Wybierz --';
+                select.appendChild(defaultOption);
+                
+                shuffledRightOptions.forEach(opt => {
+                    const option = document.createElement('option');
+                    option.value = opt;
+                    option.innerText = opt;
+                    select.appendChild(option);
                 });
-                dropZone.addEventListener('dragleave', () => {
-                    dropZone.classList.remove('drag-over');
-                });
-                dropZone.addEventListener('drop', (e) => {
-                    e.preventDefault();
-                    dropZone.classList.remove('drag-over');
-                    if (answered) return;
-                    
-                    const draggedId = e.dataTransfer.getData('text/plain');
-                    const draggedElement = document.getElementById(draggedId);
-                    if (draggedElement) {
-                        // If dropzone already has a tile, move the existing one back to pool
-                        if (dropZone.children.length > 0) {
-                            const existingTile = dropZone.children[0];
-                            document.getElementById('drag-pool').appendChild(existingTile);
-                        }
-                        dropZone.appendChild(draggedElement);
-                    }
-                });
+                
+                rightDrop.appendChild(select);
                 
                 row.appendChild(leftText);
-                row.appendChild(dropZone);
+                row.appendChild(rightDrop);
                 matchingContainer.appendChild(row);
             });
         } else {
@@ -381,11 +354,7 @@ function buildQuestionHTML(q) {
     
     const statsSpan = document.createElement('span');
     statsSpan.className = 'stats';
-    let statusStr = '';
-    if (userStats[q.id]) {
-        statusStr = ` - ${userStats[q.id] === 'known' ? 'Znane' : 'Do powtórki'}`;
-    }
-    statsSpan.innerText = `Question ${currentIndexInAll + 1} of ${allQuestions.length}${statusStr}`;
+    statsSpan.innerText = `Pozostało pytań: ${remainingQuestions.length}`;
     controls.appendChild(statsSpan);
     
     const actionsFlex = document.createElement('div');
@@ -420,7 +389,7 @@ function buildQuestionHTML(q) {
     
     const btnRepeat = document.createElement('button');
     btnRepeat.className = 'btn btn-danger';
-    btnRepeat.innerText = 'Muszę powtórzyć';
+    btnRepeat.innerText = 'Nie wiem';
     btnRepeat.addEventListener('click', () => recordStat('repeat'));
     
     fbDiv.appendChild(btnKnown);
@@ -441,36 +410,34 @@ function showFeedbackAndExplanation() {
 }
 
 function recordStat(status) {
+    if (status === 'known') {
+        remainingQuestions = remainingQuestions.filter(q => q.id !== currentQuestion.id);
+    }
+    
     userStats[currentQuestion.id] = status;
     localStorage.setItem('ccna_quiz_stats', JSON.stringify(userStats));
     
-    let nextIndex = currentIndexInAll + 1;
-    if (showOnlyImages) {
-        const nextImgIndex = allQuestions.findIndex((q, i) => i >= nextIndex && !!q.image);
-        nextIndex = nextImgIndex !== -1 ? nextImgIndex : allQuestions.length;
-    }
+    loadNextRandomQuestion();
+}
+
+function showEndMessage() {
+    const container = document.getElementById('quiz-container');
+    container.innerHTML = '';
     
-    if (nextIndex < allQuestions.length) {
-        loadQuestion(nextIndex);
-    } else {
-        const container = document.getElementById('quiz-container');
-        container.innerHTML = '';
-        
-        const card = document.createElement('div');
-        card.className = 'quiz-card';
-        card.style.textAlign = 'center';
-        
-        const h2 = document.createElement('h2');
-        h2.style.color = '#34d399';
-        h2.innerText = 'Koniec pytań!';
-        
-        const p = document.createElement('p');
-        p.innerText = 'Osiągnięto koniec dostępnej listy.';
-        
-        card.appendChild(h2);
-        card.appendChild(p);
-        container.appendChild(card);
-    }
+    const card = document.createElement('div');
+    card.className = 'quiz-card';
+    card.style.textAlign = 'center';
+    
+    const h2 = document.createElement('h2');
+    h2.style.color = '#34d399';
+    h2.innerText = 'Gratulacje, przerobiłeś wszystko!';
+    
+    const p = document.createElement('p');
+    p.innerText = 'Nie ma już więcej pytań do powtórki.';
+    
+    card.appendChild(h2);
+    card.appendChild(p);
+    container.appendChild(card);
 }
 
 function selectOption(element) {
@@ -519,20 +486,27 @@ function checkMatching() {
     if (answered) return;
     answered = true;
 
-    const dropZones = document.querySelectorAll('.drop-zone');
-    dropZones.forEach(zone => {
-        const correctVal = zone.dataset.correct;
-        let selectedVal = "";
-        if (zone.children.length > 0) {
-            selectedVal = zone.children[0].dataset.value;
-            // Zablokowanie przenoszenia po weryfikacji
-            zone.children[0].draggable = false;
-        }
+    const selects = document.querySelectorAll('.matching-select');
+    selects.forEach(select => {
+        const correctVal = select.dataset.correct;
+        const selectedVal = select.value;
+        
+        select.disabled = true;
 
         if (selectedVal === correctVal) {
-            zone.classList.add('correct');
+            select.style.borderColor = '#10b981'; // green
+            select.style.backgroundColor = 'rgba(16, 185, 129, 0.1)';
         } else {
-            zone.classList.add('incorrect');
+            select.style.borderColor = '#ef4444'; // red
+            select.style.backgroundColor = 'rgba(239, 68, 68, 0.1)';
+            
+            // show what was correct
+            const correctDiv = document.createElement('div');
+            correctDiv.style.color = '#10b981';
+            correctDiv.style.fontSize = '0.875rem';
+            correctDiv.style.marginTop = '0.25rem';
+            correctDiv.innerText = `Poprawna odpowiedź: ${correctVal}`;
+            select.parentNode.appendChild(correctDiv);
         }
     });
 
