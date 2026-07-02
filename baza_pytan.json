@@ -519,7 +519,7 @@
         "id": 17,
         "question": "17. Refer to the exhibit. Match the network with the correct IP address and prefix that will satisfy the usable host addressing requirements for each network. ",
         "explanation": "Explanation: Topic 11.7.2 Network A needs to use 192.168.0.128 /25, which yields 128 host addresses. Network B needs to use 192.168.0.0 /26, which yields 64 host addresses. Network C needs to use 192.168.0.96 /27, which yields 32 host addresses. Network D needs to use 192.168.0.80/30, which yields 4 host addresses. ",
-        "image": null,
+        "image": "q17.png",
         "type": "matching",
         "matches": [
             {
@@ -873,7 +873,7 @@
         "id": 28,
         "question": "28. Refer to the exhibit. Match the network with the correct IP address and prefix that will satisfy the usable host addressing requirements for each network. (Not all options are used.) ",
         "explanation": "Explanation: Topic 11.7.2 Network A needs to use 192.168.0.0 /25 which yields 128 host addresses. Network B needs to use 192.168.0.128 /26 which yields 64 host addresses. Network C needs to use 192.168.0.192 /27 which yields 32 host addresses. Network D needs to use 192.168.0.224 /30 which yields 4 host addresses. ",
-        "image": null,
+        "image": "q28.png",
         "type": "matching",
         "matches": [
             {
@@ -4139,7 +4139,7 @@
             }
         ],
         "explanation": "Explanation: Topic 4.4.2 When a cable to an RJ-45 connector is terminated, it is important to ensure that the untwisted wires are not too long and that the flexible plastic sheath surrounding the wires is crimped down and not the bare wires. None of the colored wires should be visible from the bottom of the jack. ",
-        "image": null,
+        "image": "q109.png",
         "type": "single",
         "correct": [
             "The untwisted length of each wire is too long."
@@ -4542,7 +4542,7 @@
             }
         ],
         "explanation": "Explanation: Topic 11.5.2 Usable hosts per subnet : A subnet mask of 255.255.255.192 (/26) leaves 6 host bits (32−26=6). Using the formula 2 n −2, each subnet provides 62 usable host addresses (2 6 −2=62). Used addresses : Across the four subnets, the total used addresses are 48 (30 for Network A, 14 for Network D, and 2 each for the router-to-router links in Networks B and C). Total unused : With four subnets, there are 248 total usable addresses (62×4=248). Subtracting the 48 used addresses results in 200 unused host addresses (248−48=200). ",
-        "image": null,
+        "image": "q121.png",
         "type": "single",
         "correct": [
             "200"

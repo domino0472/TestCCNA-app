@@ -11,17 +11,24 @@ os.makedirs("assets", exist_ok=True)
 IMAGE_DICTIONARY = {
     13: "q13.png",
     15: "q15.png",
+    17: "q17.png",
     18: "q18.png",
+    28:"q28.png",
     33: "q33.png",
     35: "q35.png",
     43: "q43.png",
     47: "q47.png",
     92: "q92.png",
     98: "q98.png",
+    109: "q109.png",
     113: "q113.png",
+    118: "q118.png",
+    119: "q119.png",
+    121: "q121.png",
     127: "q127.png",
     134: "q134.png",
     150: "q150.png"
+    
 }
 
 HARDCODED_MATCHES = {
