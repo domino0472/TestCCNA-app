@@ -19,7 +19,7 @@ async function fetchQuestions() {
         const data = await response.json();
         
         allQuestions = data.filter(q => 
-            (q.options && q.options.length > 0) || q.type === 'match'
+            (q.options && q.options.length > 0) || q.type === 'matching' || q.type === 'match'
         );
         
         if (allQuestions.length > 0) {
@@ -183,17 +183,117 @@ function buildQuestionHTML(q) {
     card.appendChild(qText);
     
     // Interactable Section
-    if (q.type === 'match') {
-        const matchMsg = document.createElement('div');
-        matchMsg.style.padding = '1rem';
-        matchMsg.style.background = 'rgba(59, 130, 246, 0.1)';
-        matchMsg.style.border = '1px solid var(--accent-color)';
-        matchMsg.style.borderRadius = '0.5rem';
-        matchMsg.style.textAlign = 'center';
-        matchMsg.style.marginTop = '1.5rem';
-        matchMsg.style.color = 'var(--text-primary)';
-        matchMsg.innerText = 'Ten typ pytania wymaga ręcznego dopasowania - sprawdź PDF';
-        card.appendChild(matchMsg);
+    if (q.type === 'matching' || q.type === 'match') {
+        const matchingContainer = document.createElement('div');
+        matchingContainer.className = 'matching-container';
+        
+        if (q.matches && q.matches.length > 0) {
+            const allRightOptions = q.matches.map(m => m.right);
+            const shuffledRightOptions = allRightOptions.sort(() => Math.random() - 0.5);
+            
+            // Drag Pool (available tiles)
+            const dragPool = document.createElement('div');
+            dragPool.className = 'drag-pool';
+            dragPool.id = 'drag-pool';
+            
+            // Allow returning tiles to the pool
+            dragPool.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                dragPool.classList.add('drag-over');
+            });
+            dragPool.addEventListener('dragleave', () => {
+                dragPool.classList.remove('drag-over');
+            });
+            dragPool.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dragPool.classList.remove('drag-over');
+                if (answered) return;
+                const draggedId = e.dataTransfer.getData('text/plain');
+                const draggedElement = document.getElementById(draggedId);
+                if (draggedElement) {
+                    dragPool.appendChild(draggedElement);
+                }
+            });
+            
+            shuffledRightOptions.forEach((opt, idx) => {
+                const tile = document.createElement('div');
+                tile.className = 'draggable-tile';
+                tile.draggable = true;
+                tile.innerText = opt;
+                tile.id = 'drag-tile-' + idx;
+                tile.dataset.value = opt;
+                
+                tile.addEventListener('dragstart', (e) => {
+                    if (answered) {
+                        e.preventDefault();
+                        return;
+                    }
+                    e.dataTransfer.setData('text/plain', tile.id);
+                    e.dataTransfer.effectAllowed = 'move';
+                    setTimeout(() => tile.classList.add('dragging'), 0);
+                });
+                
+                tile.addEventListener('dragend', () => {
+                    tile.classList.remove('dragging');
+                });
+                
+                dragPool.appendChild(tile);
+            });
+            matchingContainer.appendChild(dragPool);
+            
+            // Drop Zones
+            q.matches.forEach((match, idx) => {
+                const row = document.createElement('div');
+                row.className = 'matching-row';
+                
+                const leftText = document.createElement('div');
+                leftText.className = 'matching-left';
+                leftText.innerText = match.left;
+                
+                const dropZone = document.createElement('div');
+                dropZone.className = 'drop-zone';
+                dropZone.dataset.correct = match.right;
+                
+                dropZone.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    if (!answered) dropZone.classList.add('drag-over');
+                });
+                dropZone.addEventListener('dragleave', () => {
+                    dropZone.classList.remove('drag-over');
+                });
+                dropZone.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    dropZone.classList.remove('drag-over');
+                    if (answered) return;
+                    
+                    const draggedId = e.dataTransfer.getData('text/plain');
+                    const draggedElement = document.getElementById(draggedId);
+                    if (draggedElement) {
+                        // If dropzone already has a tile, move the existing one back to pool
+                        if (dropZone.children.length > 0) {
+                            const existingTile = dropZone.children[0];
+                            document.getElementById('drag-pool').appendChild(existingTile);
+                        }
+                        dropZone.appendChild(draggedElement);
+                    }
+                });
+                
+                row.appendChild(leftText);
+                row.appendChild(dropZone);
+                matchingContainer.appendChild(row);
+            });
+        } else {
+            const matchMsg = document.createElement('div');
+            matchMsg.style.padding = '1rem';
+            matchMsg.style.background = 'rgba(59, 130, 246, 0.1)';
+            matchMsg.style.border = '1px solid var(--accent-color)';
+            matchMsg.style.borderRadius = '0.5rem';
+            matchMsg.style.textAlign = 'center';
+            matchMsg.style.color = 'var(--text-primary)';
+            matchMsg.innerText = 'Brak danych do dopasowania (sprawdź w PDF).';
+            matchingContainer.appendChild(matchMsg);
+        }
+        card.appendChild(matchingContainer);
         
     } else {
         const optionsDiv = document.createElement('div');
@@ -245,29 +345,29 @@ function buildQuestionHTML(q) {
     expText.className = 'explanation-text';
     expText.innerText = q.explanation || 'No explanation available.';
     
-    if (q.type === 'match' && q.correct_mapping) {
+    if ((q.type === 'matching' || q.type === 'match') && q.matches && q.matches.length > 0) {
         const table = document.createElement('table');
         table.style.width = '100%';
         table.style.marginTop = '1rem';
         table.style.borderCollapse = 'collapse';
         
-        for (const [left, right] of Object.entries(q.correct_mapping)) {
+        q.matches.forEach(match => {
             const row = document.createElement('tr');
             row.style.borderBottom = '1px solid #374151';
             
             const td1 = document.createElement('td');
             td1.style.padding = '0.5rem';
-            td1.innerText = left;
+            td1.innerText = match.left;
             
             const td2 = document.createElement('td');
             td2.style.padding = '0.5rem';
             td2.style.color = '#34d399';
-            td2.innerText = right;
+            td2.innerText = match.right;
             
             row.appendChild(td1);
             row.appendChild(td2);
             table.appendChild(row);
-        }
+        });
         expText.appendChild(table);
     }
     
@@ -292,13 +392,13 @@ function buildQuestionHTML(q) {
     actionsFlex.style.display = 'flex';
     actionsFlex.style.gap = '1rem';
     
-    if (q.type === 'match') {
-        const showBtn = document.createElement('button');
-        showBtn.className = 'btn';
-        showBtn.id = 'check-btn';
-        showBtn.innerText = 'Pokaż odpowiedź';
-        showBtn.addEventListener('click', showFeedbackAndExplanation);
-        actionsFlex.appendChild(showBtn);
+    if (q.type === 'matching' || q.type === 'match') {
+        const checkBtn = document.createElement('button');
+        checkBtn.className = 'btn';
+        checkBtn.id = 'check-btn';
+        checkBtn.innerText = 'Sprawdź';
+        checkBtn.addEventListener('click', checkMatching);
+        actionsFlex.appendChild(checkBtn);
     } else if (q.type === 'multiple') {
         const checkBtn = document.createElement('button');
         checkBtn.className = 'btn';
@@ -413,6 +513,30 @@ function toggleMultipleOption(element) {
     if (checkBtn) {
         checkBtn.disabled = (selectedCount !== currentQuestion.maxSelections);
     }
+}
+
+function checkMatching() {
+    if (answered) return;
+    answered = true;
+
+    const dropZones = document.querySelectorAll('.drop-zone');
+    dropZones.forEach(zone => {
+        const correctVal = zone.dataset.correct;
+        let selectedVal = "";
+        if (zone.children.length > 0) {
+            selectedVal = zone.children[0].dataset.value;
+            // Zablokowanie przenoszenia po weryfikacji
+            zone.children[0].draggable = false;
+        }
+
+        if (selectedVal === correctVal) {
+            zone.classList.add('correct');
+        } else {
+            zone.classList.add('incorrect');
+        }
+    });
+
+    showFeedbackAndExplanation();
 }
 
 function checkMultiple() {

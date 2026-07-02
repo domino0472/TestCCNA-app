@@ -3,197 +3,270 @@ import json
 import re
 import os
 
-doc = fitz.open("CCNA.pdf")
+import sys
 
+doc = fitz.open("CCNA.pdf")
 os.makedirs("assets", exist_ok=True)
 
-questions = []
-current_question = None
+IMAGE_MAP = {
+    13: "page_8_img_1.png",
+    15: "page_10_img_1.jpeg",
+    17: "page_11_img_1.png",
+    18: "page_12_img_1.jpeg",
+    28: "page_18_img_1.jpeg",
+    33: "page_22_img_1.png",
+    35: "page_23_img_1.png",
+    43: "page_27_img_1.jpeg",
+    47: "page_29_img_1.png",
+    92: "page_56_img_1.jpeg",
+    98: "page_60_img_1.jpeg",
+    109: "page_66_img_1.jpeg",
+    113: "page_68_img_1.png",
+    118: "page_71_img_1.jpeg",
+    121: "page_72_img_1.jpeg",
+    127: "page_76_img_1.png",
+    134: "page_80_img_1.png",
+    150: "page_89_img_1.jpeg"
+}
+
+HARDCODED_MATCHES = {
+    12: [
+        {"left": "This network portion of the address is assigned by the provider.", "right": "global routing prefix"},
+        {"left": "This part of the address is used by an organization to identify subnets.", "right": "subnet ID"},
+        {"left": "This part of the address is the equivalent to the host portion of an IPv4 address.", "right": "interface ID"}
+    ],
+    14: [
+        {"left": "low latency", "right": "cut-through"},
+        {"left": "may forward runt frames", "right": "cut-through"},
+        {"left": "begins forwarding when the destination address is received", "right": "cut-through"},
+        {"left": "always stores the entire frame", "right": "store-and-forward"},
+        {"left": "checks the CRC before forwarding", "right": "store-and-forward"},
+        {"left": "checks the frame length before forwarding", "right": "store-and-forward"}
+    ],
+    17: [
+        {"left": "Network A", "right": "192.168.0.128/25"},
+        {"left": "Network B", "right": "192.168.0.0/26"},
+        {"left": "Network C", "right": "192.168.0.96/27"},
+        {"left": "Network D", "right": "192.168.0.80/30"}
+    ],
+    28: [
+        {"left": "Network A", "right": "192.168.0.0/25"},
+        {"left": "Network B", "right": "192.168.0.128/26"},
+        {"left": "Network C", "right": "192.168.0.192/27"},
+        {"left": "Network D", "right": "192.168.0.224/30"}
+    ],
+    30: [
+        {"left": "FTP", "right": "TCP"},
+        {"left": "HTTP", "right": "TCP"},
+        {"left": "SMTP", "right": "TCP"},
+        {"left": "DHCP", "right": "UDP"},
+        {"left": "TFTP", "right": "UDP"}
+    ],
+    58: [
+        {"left": "electrical threats", "right": "voltage spikes, insufficient supply voltage (brownouts), unconditioned power (noise), and total power loss"},
+        {"left": "hardware threats", "right": "physical damage to servers, routers, switches, cabling plant, and workstations"},
+        {"left": "environmental threats", "right": "temperature extremes (too hot or too cold) or humidity extremes (too wet or too dry)"},
+        {"left": "maintenance threats", "right": "poor handling of key electrical components (electrostatic discharge), lack of critical spare parts, poor cabling, and poor labeling"}
+    ],
+    96: [
+        {"left": "no dedicated server is required", "right": "peer-to-peer network"},
+        {"left": "client and server roles are set on a per request basis", "right": "peer-to-peer network"},
+        {"left": "requires a specific user interface", "right": "peer-to-peer application"},
+        {"left": "a background service is required", "right": "peer-to-peer application"}
+    ],
+    99: [
+        {"left": "This field checks if the frame has been damaged during the transfer.", "right": "error detection"},
+        {"left": "This field helps to direct the frame toward its destination.", "right": "addressing"},
+        {"left": "This field identifies the beginning of a frame.", "right": "frame start"},
+        {"left": "This field is used by the LLC to identify the Layer 3 protocol.", "right": "type"}
+    ],
+    101: [
+        {"left": "prevents access by port number", "right": "application filtering"},
+        {"left": "prevents access based on IP or MAC address", "right": "packet filtering"},
+        {"left": "prevents unsolicited incoming sessions", "right": "stateful packet inspection"},
+        {"left": "prevents access to websites", "right": "URL filtering"}
+    ],
+    110: [
+        {"left": "contained in the Layer 3 header", "right": "IP address"},
+        {"left": "separated into a network portion and a unique identifier", "right": "IP address"},
+        {"left": "32 or 128 bits", "right": "IP address"},
+        {"left": "contained in the Layer 2 header", "right": "MAC address"},
+        {"left": "separated into OUI and a unique identifier", "right": "MAC address"},
+        {"left": "48 bits", "right": "MAC address"}
+    ],
+    120: [
+        {"left": "no dedicated server is required", "right": "peer-to-peer network"},
+        {"left": "client and server roles are set on a per request basis", "right": "peer-to-peer network"},
+        {"left": "requires a specific user interface", "right": "peer-to-peer application"},
+        {"left": "a background service is required", "right": "peer-to-peer application"}
+    ],
+    126: [
+        {"left": "Destination MAC Address", "right": "Layer 2"},
+        {"left": "FCS (Frame Check Sequence)", "right": "Layer 2"},
+        {"left": "802.2 header", "right": "Layer 2"},
+        {"left": "Source IP Address", "right": "Layer 3"},
+        {"left": "TTL", "right": "Layer 3"},
+        {"left": "Destination Port Number", "right": "Layer 4"},
+        {"left": "Acknowledgment Number", "right": "Layer 4"}
+    ],
+    145: [
+        {"left": "the process of placing one message format inside another message format", "right": "message encapsulation"},
+        {"left": "the process of breaking up a long message into individual pieces before being sent over the network", "right": "message sizing"},
+        {"left": "the process of converting information from one format into another acceptable for transmission", "right": "message encoding"}
+    ],
+    149: [
+        {"left": "number of bytes a destination device can accept and process at one time", "right": "window size"},
+        {"left": "used to identify missing segments of data", "right": "sequence numbers"},
+        {"left": "method of managing segments of data loss", "right": "retransmission"},
+        {"left": "received by a sender before transmitting more segments in a session", "right": "acknowledgment"}
+    ],
+    152: [
+        {"left": "location of a desktop PC in a classroom", "right": "physical topology diagram"},
+        {"left": "path of cables that connect rooms to wiring closets", "right": "physical topology diagram"},
+        {"left": "IP address of a server", "right": "logical topology diagram"}
+    ],
+    157: [
+        {"left": "an experimental address", "right": "240.2.6.255"},
+        {"left": "a link-local address", "right": "169.254.1.5"},
+        {"left": "a public address", "right": "198.133.219.2"},
+        {"left": "a loopback address", "right": "127.0.0.1"}
+    ]
+}
 
 COLOR_RED = 16711680
+questions = []
 
-# To correctly order spans which might be broken
-def process_pdf():
-    global current_question
-    for page_num in range(len(doc)):
-        page = doc.load_page(page_num)
-        
-        # Check images on this page
-        images_on_page = page.get_images(full=True)
-        
-        # Check if previous question needs an exhibit from this new page
-        if current_question and current_question.get("pending_exhibit") and images_on_page:
-            current_question["has_exhibit"] = True
-            current_question["pending_exhibit"] = False
-            xref = images_on_page[0][0]
-            base_image = doc.extract_image(xref)
-            ext = base_image["ext"]
-            image_bytes = base_image["image"]
-            img_path = f"assets/q{current_question['id']}.{ext}"
-            with open(img_path, "wb") as f:
-                f.write(image_bytes)
-            current_question["image"] = img_path
+# KROK 1: Wyodrębnienie WSZYSTKICH obrazków do assets/
+print("Wyodrębnianie obrazków...")
+for page_num in range(len(doc)):
+    page = doc.load_page(page_num)
+    blocks = page.get_text("dict")["blocks"]
+    img_idx = 0
+    for b in blocks:
+        if b["type"] == 1: # Image block
+            if b.get("width", 0) >= 100 and b.get("height", 0) >= 40:
+                ext = b.get("ext", "png")
+                img_name = f"page_{page_num}_img_{img_idx}.{ext}"
+                img_path = os.path.join("assets", img_name)
+                
+                if not os.path.exists(img_path):
+                    if b.get("image"):
+                        with open(img_path, "wb") as f:
+                            f.write(b["image"])
+                    elif b.get("xref"):
+                        base_image = doc.extract_image(b["xref"])
+                        with open(img_path, "wb") as f:
+                            f.write(base_image["image"])
+            img_idx += 1
 
-        blocks = page.get_text("dict")["blocks"]
-        
-        for b in blocks:
-            if "lines" not in b:
+# KROK 2: Parsowanie tekstu
+print("Parsowanie pytań...")
+active_question = None
+capture_options = False
+
+for page_num in range(len(doc)):
+    page = doc.load_page(page_num)
+    blocks = page.get_text("dict")["blocks"]
+    
+    # Sort blocks natively (y0)
+    blocks.sort(key=lambda b: b["bbox"][1])
+    
+    for b in blocks:
+        if b["type"] == 0: # Text block
+            # CAŁKOWITE ODRZUCENIE SIDEBARU (Współrzędna X > 300)
+            if b["bbox"][0] > 300:
                 continue
-                
-            for l in b["lines"]:
-                # To reconstruct the line
-                line_text = ""
-                is_bold = False
-                is_red = False
-                is_explanation = False
-                
-                # We'll just read spans
-                for s in l["spans"]:
-                    text = s["text"].strip()
-                    if not text:
-                        continue
-                        
-                    # Ignore header/footer/breadcrumbs (like "CCNA 1 v7.0 Final Exam Answers", dates, comments, etc)
-                    if "CCNA 1 v7.0 Final Exam" in text or "Dec 20, 2019" in text or "Last Updated:" in text or "Course #1" in text or "Comments" in text or "Press “Ctrl + F”" in text or "IT Exam Items Repository" in text or "The exam consists of" in text:
-                        continue
-                    if text in ["video", "web", "file transfer", "voice", "peer to peer"]: 
-                        pass # allow options
 
+            for l in b.get("lines", []):
+                for s in l.get("spans", []):
+                    text = s["text"].strip()
+                    if not text: continue
+                    
                     color = s["color"]
                     flags = s["flags"]
                     
-                    if "Explanation:" in text:
-                        is_explanation = True
-                    
                     if re.match(r'^\d+\.\s+', text):
-                        if current_question:
-                            questions.append(current_question)
+                        if active_question:
+                            questions.append(active_question)
                         
-                        current_question = {
+                        active_question = {
                             "id": len(questions) + 1,
                             "question": text + " ",
                             "options": [],
                             "explanation": "",
                             "image": None,
-                            "has_exhibit": False,
                             "section": "question"
                         }
-                    elif current_question:
-                        # Identify section based on style and text
-                        if "Explanation:" in text or current_question["section"] == "explanation":
-                            current_question["section"] = "explanation"
-                            current_question["explanation"] += text + " "
-                        elif color == COLOR_RED and (flags & 16):
-                            # Correct option
-                            current_question["section"] = "options"
-                            current_question["options"].append({"text": text, "is_correct": True})
-                            current_question.setdefault("raw_match_spans", []).append({"text": text, "bbox": s["bbox"]})
-                        elif not (flags & 16) and color != COLOR_RED:
-                            # Normal option (usually grey or black, non-bold)
-                            # Let's avoid noise like breadcrumbs.
-                            # Usually breadcrumbs have special characters or links, but we filter them.
-                            # If it's a short text or just normal text in options section.
-                            current_question["section"] = "options"
-                            # If previous was also an option, maybe append? Let's just append as new option
-                            current_question["options"].append({"text": text, "is_correct": False})
-                            current_question.setdefault("raw_match_spans", []).append({"text": text, "bbox": s["bbox"]})
-                        elif (flags & 16) and color != COLOR_RED:
-                            # Question text continuation
-                            if current_question["section"] == "question":
-                                current_question["question"] += text + " "
-                            else:
-                                # Could be bold text in an option or explanation
-                                pass
-                                
-        # Check for exhibit image after processing the page
-        if current_question and "exhibit" in current_question["question"].lower() and not current_question.get("has_exhibit"):
-            if images_on_page:
-                current_question["has_exhibit"] = True
-                current_question["pending_exhibit"] = False
-                xref = images_on_page[0][0]
-                base_image = doc.extract_image(xref)
-                ext = base_image["ext"]
-                image_bytes = base_image["image"]
-                img_path = f"assets/q{current_question['id']}.{ext}"
-                with open(img_path, "wb") as f:
-                    f.write(image_bytes)
-                current_question["image"] = img_path
-            else:
-                current_question["pending_exhibit"] = True
+                        capture_options = True
+                    elif active_question:
+                        if "Explanation:" in text:
+                            active_question["section"] = "explanation"
+                            capture_options = False
+                        
+                        if active_question["section"] == "explanation":
+                            active_question["explanation"] += text + " "
+                            continue
+                        
+                        if capture_options:
+                            # Zamiast szukać znaku '•' (którego nie ma w warstwie tekstowej PDF),
+                            # polegamy na odcięciu sidebaru po X > 300 i sprawdzaniu kolorów/flag
+                            if color == COLOR_RED and (flags & 16):
+                                active_question["options"].append({"text": text, "is_correct": True})
+                            elif not (flags & 16) and color != COLOR_RED:
+                                active_question["options"].append({"text": text, "is_correct": False})
+                            elif (flags & 16) and color != COLOR_RED:
+                                if active_question["section"] == "question":
+                                    active_question["question"] += text + " "
 
-    if current_question:
-        questions.append(current_question)
+if active_question:
+    questions.append(active_question)
 
-    # Clean up questions
-    for q in questions:
-        q["question"] = q["question"].strip()
-        q["explanation"] = q["explanation"].replace("Explanation:", "").strip()
+# KROK 3: Mapowanie obrazków i weryfikacja
+print("Weryfikacja obrazków i przypisywanie...")
+for q in questions:
+    q["question"] = q["question"].strip()
+    q["explanation"] = q["explanation"].replace("Explanation:", "").strip()
+    
+    if "section" in q: del q["section"]
+    
+    # MANUAL ASSIGNMENT VERIFICATION
+    if q["id"] in IMAGE_MAP:
+        expected_filename = IMAGE_MAP[q["id"]]
+        expected_path = os.path.join("assets", expected_filename)
+        if not os.path.exists(expected_path):
+            print(f"\n[BŁĄD KRYTYCZNY] Pytanie {q['id']} wymaga obrazka {expected_filename}, ale plik nie istnieje w assets/!")
+            print("Zatrzymuję skrypt, popraw IMAGE_MAP.")
+            sys.exit(1)
+        q["image"] = expected_path
+    else:
+        q["image"] = None
+    
+    # HARDCODED MATCHES
+    if q["id"] in HARDCODED_MATCHES:
+        q["type"] = "matching"
+        q["matches"] = HARDCODED_MATCHES[q["id"]]
+        if "options" in q: del q["options"]
+        if "correct" in q: del q["correct"]
+        continue
+    
+    q_lower = q["question"].lower()
+    
+    if "choose two" in q_lower:
+        q["type"] = "multiple"
+        q["maxSelections"] = 2
+    elif "choose three" in q_lower:
+        q["type"] = "multiple"
+        q["maxSelections"] = 3
+    else:
+        q["type"] = "single"
         
-        q_lower = q["question"].lower()
-        if q_lower.startswith("match ") or " match the " in q_lower or " match " in q_lower:
-            q["type"] = "match"
-            raw = q.get("raw_match_spans", [])
-            left_spans = [s for s in raw if s["bbox"][0] < 200]
-            right_spans = [s for s in raw if s["bbox"][0] >= 200]
-            
-            def group_spans(spans):
-                if not spans: return []
-                spans.sort(key=lambda s: s["bbox"][1])
-                groups = []
-                current_group = [spans[0]]
-                for s in spans[1:]:
-                    if s["bbox"][1] - current_group[-1]["bbox"][1] < 25:
-                        current_group.append(s)
-                    else:
-                        groups.append(current_group)
-                        current_group = [s]
-                groups.append(current_group)
-                items = []
-                for g in groups:
-                    g.sort(key=lambda x: (x["bbox"][1], x["bbox"][0]))
-                    text = " ".join([x["text"] for x in g]).strip()
-                    y0 = min([x["bbox"][1] for x in g])
-                    items.append({"text": text, "y0": y0})
-                return items
-            
-            left_items = group_spans(left_spans)
-            right_items = group_spans(right_spans)
-            
-            q["left_items"] = [i["text"] for i in left_items]
-            q["right_items"] = [i["text"] for i in right_items]
-            
-            mapping = {}
-            for li in left_items:
-                if not right_items: break
-                closest = min(right_items, key=lambda ri: abs(ri["y0"] - li["y0"]))
-                if abs(closest["y0"] - li["y0"]) < 20:
-                    mapping[li["text"]] = closest["text"]
-            
-            q["correct_mapping"] = mapping
-            if "options" in q: del q["options"]
-            if "raw_match_spans" in q: del q["raw_match_spans"]
-            if "correct" in q: del q["correct"]
-            continue
-
-        if "choose two" in q_lower:
-            q["type"] = "multiple"
-            q["maxSelections"] = 2
-        elif "choose three" in q_lower:
-            q["type"] = "multiple"
-            q["maxSelections"] = 3
-        else:
-            q["type"] = "single"
-            
-        correct_answers = []
-        for opt in q.get("options", []):
-            if isinstance(opt, dict) and opt.get("is_correct"):
-                correct_answers.append(opt.get("text"))
-        q["correct"] = correct_answers
-        if "raw_match_spans" in q: del q["raw_match_spans"]
-
-process_pdf()
+    correct_answers = []
+    for opt in q.get("options", []):
+        if isinstance(opt, dict) and opt.get("is_correct"):
+            correct_answers.append(opt.get("text"))
+    q["correct"] = correct_answers
 
 with open("baza_pytan.json", "w", encoding="utf-8") as f:
     json.dump(questions, f, ensure_ascii=False, indent=4)
 
-print(f"Extracted {len(questions)} questions.")
+print(f"Wyodrębniono {len(questions)} pytań i zaktualizowano JSON.")
